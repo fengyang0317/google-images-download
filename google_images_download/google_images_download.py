@@ -12,7 +12,7 @@ if cur_version >= version:  # If the Current Version of Python is 3.0 or above
     import urllib.request
     from urllib.request import Request, urlopen
     from urllib.request import URLError, HTTPError
-    from urllib.parse import quote
+    from urllib.parse import quote, unquote, urlparse, parse_qs
     import http.client
     from http.client import IncompleteRead, BadStatusLine
     http.client._MAXHEADERS = 1000
@@ -34,6 +34,7 @@ import re
 import codecs
 import socket
 from bs4 import BeautifulSoup
+from w3lib.url import safe_url_string
 
 args_list = ["keywords", "keywords_from_file", "prefix_keywords", "suffix_keywords",
              "limit", "format", "color", "color_type", "usage_rights", "size",
@@ -286,19 +287,20 @@ class googleimagesdownload:
     def format_object(self,object):
         formatted_object = {}
         extensions = [".jpg", ".jpeg", ".gif", ".png", ".bmp", ".svg", ".webp", ".ico"]
+        dic = parse_qs(urlparse('https://www.google.com' + unquote(object.get('href'))).query)
         fmt = None
         for i in extensions:
-            if i in object[1][3][0]:
+            if i in dic['imgurl'][0]:
                 fmt = i
                 break
         formatted_object['image_format'] = fmt[1:] if fmt else 'jpg'
-        formatted_object['image_height'] = object[1][3][1]
-        formatted_object['image_width'] = object[1][3][2]
-        formatted_object['image_link'] = object[1][3][0]
-        formatted_object['image_description'] = object[1][-1]['2003'][3]
-        formatted_object['image_host'] = object[1][-1]['183836587'][0]
-        formatted_object['image_source'] = object[1][-1]['2003'][2]
-        formatted_object['image_thumbnail_url'] = object[1][2][0]
+        formatted_object['image_height'] = dic['h'][0]
+        formatted_object['image_width'] = dic['w'][0]
+        formatted_object['image_link'] = dic['imgurl'][0]
+        formatted_object['image_description'] = ''
+        formatted_object['image_host'] = ''
+        formatted_object['image_source'] = ''
+        formatted_object['image_thumbnail_url'] = ''
         return formatted_object
 
 
@@ -606,7 +608,7 @@ class googleimagesdownload:
         if no_download:
             return "success","Printed url without downloading",None,image_url
         try:
-            req = Request(image_url, headers={
+            req = Request(safe_url_string(image_url), headers={
                 "User-Agent": "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"})
             try:
                 # timeout time to download an image
@@ -767,30 +769,15 @@ class googleimagesdownload:
         count = 1
 
         soup = BeautifulSoup(page, 'html.parser')
-
-        start_line = page.find('["GRID_STATE0"')
-        if start_line == '-1':
-            return items, errorCount, abs_path
-
-        p = start_line + 1
-        acc = 1
-        while acc > 0:
-            if page[p] == '[':
-                acc += 1
-            elif page[p] == ']':
-                acc -= 1
-            p += 1
-        object_decode = bytes(page[start_line:p], "utf-8").decode("unicode_escape")
-        obj = json.loads(object_decode)
-        images = [i for i in obj[2] if i[0] == 1]
+        images = soup.find_all('a', class_='wXeWr')
 
         while count < limit+1:
             if arguments['offset'] and count < int(arguments['offset']):
                     count += 1
-            elif count > len(images):
+            elif i >= len(images):
                 break
             else:
-                object = images[count - 1]
+                object = images[i]
                 #format the item for readability
                 object = self.format_object(object)
                 if arguments['metadata']:
