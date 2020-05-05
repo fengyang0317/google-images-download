@@ -33,6 +33,7 @@ import json
 import re
 import codecs
 import socket
+from bs4 import BeautifulSoup
 
 args_list = ["keywords", "keywords_from_file", "prefix_keywords", "suffix_keywords",
              "limit", "format", "color", "color_type", "usage_rights", "size",
@@ -166,6 +167,8 @@ class googleimagesdownload:
     def download_extended_page(self,url,chromedriver):
         from selenium import webdriver
         from selenium.webdriver.common.keys import Keys
+        from selenium.webdriver.support.ui import WebDriverWait
+        from selenium.webdriver.support import expected_conditions as EC
         if sys.version_info[0] < 3:
             reload(sys)
             sys.setdefaultencoding('utf8')
@@ -189,22 +192,32 @@ class googleimagesdownload:
 
         element = browser.find_element_by_tag_name("body")
         # Scroll down
-        for i in range(30):
-            element.send_keys(Keys.PAGE_DOWN)
+        for i in range(20):
+            #element.send_keys(Keys.PAGE_DOWN)
+            browser.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             time.sleep(0.3)
 
         try:
-            browser.find_element_by_id("smb").click()
-            for i in range(50):
-                element.send_keys(Keys.PAGE_DOWN)
+            browser.find_elements_by_tag_name("input")[-1].click()
+            for i in range(30):
+                browser.execute_script("window.scrollTo(0, document.body.scrollHeight);")
                 time.sleep(0.3)  # bot id protection
         except:
             for i in range(10):
-                element.send_keys(Keys.PAGE_DOWN)
+                browser.execute_script("window.scrollTo(0, document.body.scrollHeight);")
                 time.sleep(0.3)  # bot id protection
 
         print("Reached end of Page.")
         time.sleep(0.5)
+
+        images = browser.find_elements_by_class_name("wXeWr")
+        actions = webdriver.ActionChains(browser)
+        for i in images:
+            actions.context_click(i)
+        actions.perform()
+
+        end_element = browser.find_element_by_class_name("DwpMZe ")
+        WebDriverWait(browser, 20).until(EC.visibility_of(end_element))
 
         source = browser.page_source #page source
         #close the browser
@@ -272,14 +285,20 @@ class googleimagesdownload:
     #Format the object in readable format
     def format_object(self,object):
         formatted_object = {}
-        formatted_object['image_format'] = object['ity']
-        formatted_object['image_height'] = object['oh']
-        formatted_object['image_width'] = object['ow']
-        formatted_object['image_link'] = object['ou']
-        formatted_object['image_description'] = object['pt']
-        formatted_object['image_host'] = object['rh']
-        formatted_object['image_source'] = object['ru']
-        formatted_object['image_thumbnail_url'] = object['tu']
+        extensions = [".jpg", ".jpeg", ".gif", ".png", ".bmp", ".svg", ".webp", ".ico"]
+        fmt = None
+        for i in extensions:
+            if i in object[1][3][0]:
+                fmt = i
+                break
+        formatted_object['image_format'] = fmt[1:] if fmt else 'jpg'
+        formatted_object['image_height'] = object[1][3][1]
+        formatted_object['image_width'] = object[1][3][2]
+        formatted_object['image_link'] = object[1][3][0]
+        formatted_object['image_description'] = object[1][-1]['2003'][3]
+        formatted_object['image_host'] = object[1][-1]['183836587'][0]
+        formatted_object['image_source'] = object[1][-1]['2003'][2]
+        formatted_object['image_thumbnail_url'] = object[1][2][0]
         return formatted_object
 
 
@@ -712,7 +731,7 @@ class googleimagesdownload:
 
     # Finding 'Next Image' from the given raw page
     def _get_next_item(self,s):
-        start_line = s.find('rg_meta notranslate')
+        start_line = s.find('["GRID_STATE0"')
         if start_line == -1:  # If no links are found then give an error!
             end_quote = 0
             link = "no_links"
@@ -746,16 +765,32 @@ class googleimagesdownload:
         errorCount = 0
         i = 0
         count = 1
+
+        soup = BeautifulSoup(page, 'html.parser')
+
+        start_line = page.find('["GRID_STATE0"')
+        if start_line == '-1':
+            return items, errorCount, abs_path
+
+        p = start_line + 1
+        acc = 1
+        while acc > 0:
+            if page[p] == '[':
+                acc += 1
+            elif page[p] == ']':
+                acc -= 1
+            p += 1
+        object_decode = bytes(page[start_line:p], "utf-8").decode("unicode_escape")
+        obj = json.loads(object_decode)
+        images = [i for i in obj[2] if i[0] == 1]
+
         while count < limit+1:
-            object, end_content = self._get_next_item(page)
-            if object == "no_links":
-                break
-            elif object == "":
-                page = page[end_content:]
-            elif arguments['offset'] and count < int(arguments['offset']):
+            if arguments['offset'] and count < int(arguments['offset']):
                     count += 1
-                    page = page[end_content:]
+            elif count > len(images):
+                break
             else:
+                object = images[count - 1]
                 #format the item for readability
                 object = self.format_object(object)
                 if arguments['metadata']:
@@ -785,7 +820,6 @@ class googleimagesdownload:
                 if arguments['delay']:
                     time.sleep(int(arguments['delay']))
 
-                page = page[end_content:]
             i += 1
         if count < limit:
             print("\n\nUnfortunately all " + str(
