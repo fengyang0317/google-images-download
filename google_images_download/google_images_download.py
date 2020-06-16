@@ -268,18 +268,9 @@ class googleimagesdownload:
 
     # Getting all links with the help of '_images_get_next_image'
     def get_all_tabs(self,page):
-        tabs = {}
-        while True:
-            item,item_name,end_content = self.get_next_tab(page)
-            if item == "no_tabs":
-                break
-            else:
-                if len(item_name) > 100 or item_name == "background-color":
-                    break
-                else:
-                    tabs[item_name] = item  # Append all the links in the list named 'Links'
-                    time.sleep(0.1)  # Timer could be used to slow down the request for image downloads
-                    page = page[end_content:]
+        soup = BeautifulSoup(page, 'html.parser')
+        a_tabs = soup.find_all('a', class_='F9PbJd IJRrpb xKddTc')
+        tabs = {i.get('aria-label'): 'https://www.google.com' + i.get('href') for i in a_tabs}
         return tabs
 
 
@@ -780,6 +771,10 @@ class googleimagesdownload:
                 object = images[i]
                 #format the item for readability
                 object = self.format_object(object)
+                items.append(object)
+                i += 1
+                count += 1
+                continue
                 if arguments['metadata']:
                     if not arguments["silent_mode"]:
                         print("\nImage Metadata: " + str(object))
@@ -987,6 +982,8 @@ class googleimagesdownload:
                     #Related images
                     if arguments['related_images']:
                         print("\nGetting list of related keywords...this may take a few moments")
+                        if not os.path.exists('logs/' + search_keyword[i]):
+                            os.mkdir('logs/' + search_keyword[i])
                         tabs = self.get_all_tabs(raw_html)
                         for key, value in tabs.items():
                             final_search_term = (search_term + " - " + key)
@@ -996,7 +993,9 @@ class googleimagesdownload:
                             else:
                                 new_raw_html = self.download_extended_page(value,arguments['chromedriver'])
                             self.create_directories(main_directory, final_search_term,arguments['thumbnail'],arguments['thumbnail_only'])
-                            self._get_all_items(new_raw_html, main_directory, search_term + " - " + key, limit,arguments)
+                            items, _, _ = self._get_all_items(new_raw_html, main_directory, search_term + " - " + key, limit,arguments)
+                            with open('logs/%s/%s.json' % (search_keyword[i], key), 'w') as f:
+                                json.dump(items, f, indent=4, sort_keys=True)
 
                     i += 1
                     total_errors = total_errors + errorCount
