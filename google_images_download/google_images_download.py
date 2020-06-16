@@ -955,7 +955,7 @@ class googleimagesdownload:
 
                     url = self.build_search_url(search_term,params,arguments['url'],arguments['similar_images'],arguments['specific_site'],arguments['safe_search'])      #building main search url
 
-                    if limit < 101:
+                    if limit < 101 or os.path.exists("logs/"+search_keyword[i]+".json"):
                         raw_html = self.download_page(url)  # download page
                     else:
                         raw_html = self.download_extended_page(url,arguments['chromedriver'])
@@ -965,19 +965,21 @@ class googleimagesdownload:
                             print("Getting URLs without downloading images...")
                         else:
                             print("Starting Download...")
-                    items,errorCount,abs_path = self._get_all_items(raw_html,main_directory,dir_name,limit,arguments)    #get all image items and download images
-                    paths[pky + search_keyword[i] + sky] = abs_path
 
-                    #dumps into a json file
-                    if arguments['extract_metadata']:
-                        try:
-                            if not os.path.exists("logs"):
-                                os.makedirs("logs")
-                        except OSError as e:
-                            print(e)
-                        json_file = open("logs/"+search_keyword[i]+".json", "w")
-                        json.dump(items, json_file, indent=4, sort_keys=True)
-                        json_file.close()
+                    if not os.path.exists("logs/"+search_keyword[i]+".json"):
+                        items,errorCount,abs_path = self._get_all_items(raw_html,main_directory,dir_name,limit,arguments)    #get all image items and download images
+                        paths[pky + search_keyword[i] + sky] = abs_path
+
+                        #dumps into a json file
+                        if arguments['extract_metadata']:
+                            try:
+                                if not os.path.exists("logs"):
+                                    os.makedirs("logs")
+                            except OSError as e:
+                                print(e)
+                            json_file = open("logs/"+search_keyword[i]+".json", "w")
+                            json.dump(items, json_file, indent=4, sort_keys=True)
+                            json_file.close()
 
                     #Related images
                     if arguments['related_images']:
@@ -986,6 +988,8 @@ class googleimagesdownload:
                             os.mkdir('logs/' + search_keyword[i])
                         tabs = self.get_all_tabs(raw_html)
                         for key, value in tabs.items():
+                            if os.path.exists('logs/%s/%s.json' % (search_keyword[i], key)):
+                                continue
                             final_search_term = (search_term + " - " + key)
                             print("\nNow Downloading - " + final_search_term)
                             if limit < 101:
