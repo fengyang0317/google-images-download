@@ -278,6 +278,8 @@ class googleimagesdownload:
     def format_object(self,object):
         formatted_object = {}
         extensions = [".jpg", ".jpeg", ".gif", ".png", ".bmp", ".svg", ".webp", ".ico"]
+        if object.get('href') is None:
+            return None
         dic = parse_qs(urlparse('https://www.google.com' + unquote(object.get('href'))).query)
         fmt = None
         for i in extensions:
@@ -285,8 +287,8 @@ class googleimagesdownload:
                 fmt = i
                 break
         formatted_object['image_format'] = fmt[1:] if fmt else 'jpg'
-        formatted_object['image_height'] = dic['h'][0]
-        formatted_object['image_width'] = dic['w'][0]
+        #formatted_object['image_height'] = dic['h'][0]
+        #formatted_object['image_width'] = dic['w'][0]
         formatted_object['image_link'] = dic['imgurl'][0]
         formatted_object['image_description'] = ''
         formatted_object['image_host'] = ''
@@ -771,7 +773,8 @@ class googleimagesdownload:
                 object = images[i]
                 #format the item for readability
                 object = self.format_object(object)
-                items.append(object)
+                if object:
+                    items.append(object)
                 i += 1
                 count += 1
                 continue
@@ -966,6 +969,7 @@ class googleimagesdownload:
                         else:
                             print("Starting Download...")
 
+                    errorCount = 0
                     if not os.path.exists("logs/"+search_keyword[i]+".json"):
                         items,errorCount,abs_path = self._get_all_items(raw_html,main_directory,dir_name,limit,arguments)    #get all image items and download images
                         paths[pky + search_keyword[i] + sky] = abs_path
